@@ -9,7 +9,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use util::{VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
 use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::Duration;
 use authtoken::AuthToken;
 
@@ -26,9 +26,9 @@ async fn main() -> std::io::Result<()> {
         exit(1)
     }
 
-    let auth_token = Arc::new(Mutex::new(AuthToken::new()));
+    let auth_token = Arc::new(RwLock::new(AuthToken::new()));
     let auth_data = Data::new(auth_token.clone());
-    println!("Initial auth token: {}", &auth_token.lock().await.token);
+    println!("Initial auth token: {}", &auth_token.read().await.token);
 
     let refresh_loop_handle = tokio::spawn(auth_token_refresh_loop(Arc::clone(&auth_token)));
 
@@ -54,10 +54,10 @@ async fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn auth_token_refresh_loop(auth_token: Arc<Mutex<AuthToken>>) {
+async fn auth_token_refresh_loop(auth_token: Arc<RwLock<AuthToken>>) {
     loop {
         tokio::time::sleep(Duration::from_secs(AUTH_TOKEN_REFRESH_RATE_S)).await;
-        let result = auth_token.lock().await.refresh();
+        let result = auth_token.write().await.refresh();
         match result {
             // TODO: change prints to logs w/ timestamps
             Ok(_) => println!("AuthToken refreshed sucessfully"),
@@ -83,10 +83,10 @@ struct TimerInterval {
 #[post("/request/{device_token}")]
 async fn request(device_token: web::Path<String>,
     payload: web::Json<RequestData>,
-    auth_token: web::Data<Arc<Mutex<AuthToken>>>) -> impl Responder {
+    auth_token: web::Data<Arc<RwLock<AuthToken>>>) -> impl Responder {
 
     println!("payload: {:#?}", payload);
-    println!("auth_token used: {}", &auth_token.lock().await.token);
+    println!("auth_token used: {}", &auth_token.read().await.token);
 
     tokio::spawn(async move {
         let time_intervals = payload.clone().time_intervals;
@@ -102,7 +102,7 @@ async fn request(device_token: web::Path<String>,
             if target_time < current_time { continue; }
             tokio::time::sleep(dbg!(target_time - current_time)).await;
 
-            let auth = &auth_token.lock().await.token;
+            let auth = &auth_token.read().await.token;
             send_request_to_apns(&device_token, auth, format!("{} {}", i, time_interval.status)).await;
             i += 1;
         }
