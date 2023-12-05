@@ -8,13 +8,18 @@ use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use util::{VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
-use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env};
-use tokio::sync::RwLock;
+use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env, collections::HashMap};
+use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc::Sender;
 use tokio::time::Duration;
 use authtoken::AuthToken;
 
+const STRESS_TEST: bool = false;
+
 const AUTH_TOKEN_REFRESH_RATE_S: u64 = 60 * 50; // Needs refresh between 20-60 minutes
 const HOST_ADDR: &str = "127.0.0.1:9797";
+
+type CancelMap = HashMap<String, Sender<bool>>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -30,6 +35,9 @@ async fn main() -> std::io::Result<()> {
     let auth_data = Data::new(auth_token.clone());
     println!("Initial auth token: {}", &auth_token.read().await.token);
 
+    let cancel_channels: CancelMap = HashMap::new();
+    let cancel_channels_data = Data::new(Arc::new(RwLock::new(cancel_channels)));
+
     let refresh_loop_handle = tokio::spawn(auth_token_refresh_loop(Arc::clone(&auth_token)));
 
     let server_handle = HttpServer::new(move || {
@@ -40,6 +48,7 @@ async fn main() -> std::io::Result<()> {
             });
         App::new()
             .app_data(Data::clone(&auth_data))
+            .app_data(Data::clone(&cancel_channels_data))
             .app_data(json_cfg)
             .service(request)
             .service(cancel_request)
@@ -83,7 +92,8 @@ struct TimerInterval {
 #[post("/request/{device_token}")]
 async fn request(device_token: web::Path<String>,
     payload: web::Json<RequestData>,
-    auth_token: web::Data<Arc<RwLock<AuthToken>>>) -> impl Responder {
+    auth_token: web::Data<Arc<RwLock<AuthToken>>>,
+    cancel_channels: web::Data<Arc<RwLock<CancelMap>>>) -> impl Responder {
 
     println!("payload: {:#?}", payload);
     println!("auth_token used: {}", &auth_token.read().await.token);
@@ -93,14 +103,31 @@ async fn request(device_token: web::Path<String>,
         let mut current_time: Duration;
         let mut target_time: Duration;
 
+        let (tx, mut rx) = mpsc::channel(1);
+        { 
+            let mut cancel_map = cancel_channels.write().await;
+            if let Some(existing_cancel) = cancel_map.get(device_token.as_ref()) {
+                existing_cancel.send(true).await.ok();
+            }
+            cancel_map.insert(device_token.clone(), tx);
+        }
+
         let mut i = 0;
         for time_interval in time_intervals {
-
             target_time = Duration::from_secs_f64(time_interval.starts_at);
             current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
             if target_time < current_time { continue; }
-            tokio::time::sleep(dbg!(target_time - current_time)).await;
+
+            let sleep_handle = tokio::time::sleep(dbg!(target_time - current_time));
+            let cancel_handle = rx.recv();
+
+            tokio::select! {
+                _ = sleep_handle => {}
+                _ = cancel_handle => {
+                    println!("Request canceled for device: {}", device_token.as_ref());
+                    break;
+                }
+            }
 
             let auth = &auth_token.read().await.token;
             send_request_to_apns(&device_token, auth, format!("{} {}", i, time_interval.status)).await;
@@ -110,12 +137,23 @@ async fn request(device_token: web::Path<String>,
     HttpResponse::Ok()
 }
 
-#[post("/cancel")]
-async fn cancel_request() -> impl Responder {
-    "todo"
+#[post("/cancel/{device_token}")]
+async fn cancel_request(device_token: web::Path<String>,
+    cancel_channels: web::Data<Arc<RwLock<CancelMap>>>) -> impl Responder {
+    if let Some(cancel) = cancel_channels.read().await.get(device_token.as_ref()) {
+        cancel.send(true).await.ok();
+    }
+    cancel_channels.write().await.remove(device_token.as_ref());
+    HttpResponse::Ok()
 }
 
 async fn send_request_to_apns(device_token: &String, auth_token: &String, msg: String) {
+    if STRESS_TEST {
+        println!("Simulated request to apns (STRESS_TEST=true)");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        return;
+    }
+
     let client = reqwest::Client::builder()
         .http2_prior_knowledge()
         .build().unwrap();
