@@ -7,6 +7,7 @@ use actix_web::{Responder, HttpResponse, HttpServer, App, post, web::{self, Data
 use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
+use serde_json::json;
 use util::{VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
 use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env, collections::HashMap};
 use tokio::sync::{mpsc, RwLock};
@@ -20,6 +21,9 @@ const AUTH_TOKEN_REFRESH_RATE_S: u64 = 60 * 50; // Needs refresh between 20-60 m
 const HOST_ADDR: &str = "127.0.0.1:9797";
 
 type CancelMap = HashMap<String, Sender<bool>>;
+
+/// <device_token, push_token>
+type PushTokenMap = HashMap<String, String>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -35,6 +39,9 @@ async fn main() -> std::io::Result<()> {
     let auth_data = Data::new(auth_token.clone());
     println!("Initial auth token: {}", &auth_token.read().await.token);
 
+    let push_token_map: PushTokenMap = HashMap::new();
+    let push_token_map_data = Data::new(Arc::new(RwLock::new(push_token_map)));
+
     let cancel_channels: CancelMap = HashMap::new();
     let cancel_channels_data = Data::new(Arc::new(RwLock::new(cancel_channels)));
 
@@ -48,9 +55,11 @@ async fn main() -> std::io::Result<()> {
             });
         App::new()
             .app_data(Data::clone(&auth_data))
+            .app_data(Data::clone(&push_token_map_data))
             .app_data(Data::clone(&cancel_channels_data))
             .app_data(json_cfg)
             .service(request)
+            .service(update_push_token)
             .service(cancel_request)
     })
         .bind(HOST_ADDR)?
@@ -89,19 +98,24 @@ struct TimerInterval {
     starts_at: f64,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct PushTokenData {
+    push_token: String,
+}
+
 #[post("/request/{device_token}")]
 async fn request(device_token: web::Path<String>,
     payload: web::Json<RequestData>,
     auth_token: web::Data<Arc<RwLock<AuthToken>>>,
-    cancel_channels: web::Data<Arc<RwLock<CancelMap>>>) -> impl Responder {
-
-    println!("payload: {:#?}", payload);
-    println!("auth_token used: {}", &auth_token.read().await.token);
+    cancel_channels: web::Data<Arc<RwLock<CancelMap>>>,
+    push_token_map: web::Data<Arc<RwLock<PushTokenMap>>>) -> impl Responder {
 
     tokio::spawn(async move {
-        let time_intervals = payload.clone().time_intervals;
+        let time_intervals = payload.time_intervals.clone();
         let mut current_time: Duration;
         let mut target_time: Duration;
+        let mut wait_time: Duration;
 
         let (tx, mut rx) = mpsc::channel(1);
         { 
@@ -112,13 +126,16 @@ async fn request(device_token: web::Path<String>,
             cancel_map.insert(device_token.clone(), tx);
         }
 
-        let mut i = 0;
         for time_interval in time_intervals {
             target_time = Duration::from_secs_f64(time_interval.starts_at);
             current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-            if target_time < current_time { continue; }
+            if target_time < current_time {
+                wait_time = Duration::from_secs(0)
+            } else {
+                wait_time = target_time - current_time
+            }
 
-            let sleep_handle = tokio::time::sleep(dbg!(target_time - current_time));
+            let sleep_handle = tokio::time::sleep(dbg!(wait_time));
             let cancel_handle = rx.recv();
 
             tokio::select! {
@@ -130,16 +147,28 @@ async fn request(device_token: web::Path<String>,
             }
 
             let auth = &auth_token.read().await.token;
-            send_request_to_apns(&device_token, auth, format!("{} {}", i, time_interval.status)).await;
-            i += 1;
+            if let Some(push_token) = push_token_map.read().await.get(device_token.as_ref()) {
+                send_la_update_to_apns(push_token, auth, &time_interval.status).await;
+            }
         }
     });
+    HttpResponse::Ok()
+}
+
+#[post("/pushtoken/{device_token}")]
+async fn update_push_token(device_token: web::Path<String>,
+    payload: web::Json<PushTokenData>,
+    push_token_map: web::Data<Arc<RwLock<PushTokenMap>>>) -> impl Responder {
+
+    push_token_map.write().await.insert(device_token.clone(), payload.push_token.clone());
+    println!("Updating push_token (push_token_map size is now {}) {}", push_token_map.read().await.len(), payload.push_token);
     HttpResponse::Ok()
 }
 
 #[post("/cancel/{device_token}")]
 async fn cancel_request(device_token: web::Path<String>,
     cancel_channels: web::Data<Arc<RwLock<CancelMap>>>) -> impl Responder {
+
     if let Some(cancel) = cancel_channels.read().await.get(device_token.as_ref()) {
         cancel.send(true).await.ok();
     }
@@ -147,7 +176,8 @@ async fn cancel_request(device_token: web::Path<String>,
     HttpResponse::Ok()
 }
 
-async fn send_request_to_apns(device_token: &String, auth_token: &String, msg: String) {
+/// Send a live activity update to APNs
+async fn send_la_update_to_apns(token: &String, auth_token: &String, status: &String) {
     if STRESS_TEST {
         println!("Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -157,16 +187,36 @@ async fn send_request_to_apns(device_token: &String, auth_token: &String, msg: S
     let client = reqwest::Client::builder()
         .http2_prior_knowledge()
         .build().unwrap();
-    let url = format!("https://{}/3/device/{}", env::var(VAR_APNS_HOST_NAME).unwrap(), device_token);
+    let url = format!("https://{}/3/device/{}", env::var(VAR_APNS_HOST_NAME).unwrap(), token);
 
     let mut headers = HeaderMap::new();
-    headers.insert("apns-topic", HeaderValue::from_str(env::var(VAR_TOPIC).unwrap().as_str()).unwrap());
-    headers.insert("apns-push-type", HeaderValue::from_static("alert"));
+    headers.insert("apns-topic", HeaderValue::from_str(format!("{}.push-type.liveactivity", env::var(VAR_TOPIC).unwrap()).as_str()).unwrap());
+    headers.insert("apns-push-type", HeaderValue::from_static("liveactivity"));
+    headers.insert("apns-priority", HeaderValue::from_static("10"));
     headers.insert("authorization", HeaderValue::from_str(format!("bearer {}", auth_token).as_str()).unwrap());
     headers.insert("content-type", HeaderValue::from_static("application/json"));
 
-    // let body = "{\"aps\":{\"alert\":\"testing testing 1 5 7\"}}";
-    let body = format!("{{\"aps\":{{\"alert\":\"test {}\"}}}}", msg);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+    let body = json!({
+        "aps": {
+            "timestamp": now,
+            "event": "update",
+            "dismissal-date": now + 45 * 60,
+            "content-state": {
+                "status": status,
+                "startTimestamp": now,
+                "timeRemaining": 0,
+                "isFirst": false,
+            },
+            "alert": {
+                "title": format!("Time to {status}"),
+                "body": "test body",
+            }
+        }
+    }).to_string();
+    println!("Body: {body}");
+
     headers.insert("content-length", HeaderValue::from_str(body.as_bytes().len().to_string().as_str()).unwrap());
 
     let result = client.post(url)
