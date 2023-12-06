@@ -95,7 +95,9 @@ struct RequestData {
 #[serde(rename_all = "camelCase")]
 struct TimerInterval {
     status: String,
+    task: String,
     starts_at: f64,
+    current_segment: u32,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -148,7 +150,7 @@ async fn request(device_token: web::Path<String>,
 
             let auth = &auth_token.read().await.token;
             if let Some(push_token) = push_token_map.read().await.get(device_token.as_ref()) {
-                send_la_update_to_apns(push_token, auth, &time_interval.status).await;
+                send_la_update_to_apns(push_token, auth, &time_interval).await;
             }
         }
     });
@@ -177,7 +179,7 @@ async fn cancel_request(device_token: web::Path<String>,
 }
 
 /// Send a live activity update to APNs
-async fn send_la_update_to_apns(token: &String, auth_token: &String, status: &String) {
+async fn send_la_update_to_apns(token: &String, auth_token: &String, timerInterval: &TimerInterval) {
     if STRESS_TEST {
         println!("Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -204,13 +206,15 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, status: &St
             "event": "update",
             "dismissal-date": now + 45 * 60,
             "content-state": {
-                "status": status,
+                "status": timerInterval.status,
+                "task": timerInterval.task,
+                "currentSegment": timerInterval.current_segment,
                 "startTimestamp": now,
                 "timeRemaining": 0,
                 "isFirst": false,
             },
             "alert": {
-                "title": format!("Time to {status}"),
+                "title": format!("Time to {}", timerInterval.status),
                 "body": "test body",
             }
         }
