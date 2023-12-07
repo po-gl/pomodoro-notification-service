@@ -179,7 +179,7 @@ async fn cancel_request(device_token: web::Path<String>,
 }
 
 /// Send a live activity update to APNs
-async fn send_la_update_to_apns(token: &String, auth_token: &String, timerInterval: &TimerInterval) {
+async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_interval: &TimerInterval) {
     if STRESS_TEST {
         println!("Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -206,15 +206,16 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timerInterv
             "event": "update",
             "dismissal-date": now + 5 * 60,
             "content-state": {
-                "status": timerInterval.status,
-                "task": timerInterval.task,
-                "currentSegment": timerInterval.current_segment,
+                "status": timer_interval.status,
+                "task": timer_interval.task,
+                "currentSegment": timer_interval.current_segment,
                 "startTimestamp": now,
                 "timeRemaining": 0,
-                "isFirst": false,
+                "isFullSegment": true,
+                "isPaused": false,
             },
             "alert": {
-                "title": format!("Time to {}", timerInterval.status),
+                "title": format!("Time to {}", timer_interval.status),
                 "body": "test body",
             }
         }
