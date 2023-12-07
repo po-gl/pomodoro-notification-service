@@ -204,7 +204,7 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timerInterv
         "aps": {
             "timestamp": now,
             "event": "update",
-            "dismissal-date": now + 45 * 60,
+            "dismissal-date": now + 5 * 60,
             "content-state": {
                 "status": timerInterval.status,
                 "task": timerInterval.task,
