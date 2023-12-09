@@ -89,6 +89,7 @@ async fn auth_token_refresh_loop(auth_token: Arc<RwLock<AuthToken>>) {
 #[serde(rename_all = "camelCase")]
 struct RequestData {
     time_intervals: Vec<TimerInterval>,
+    segment_count: u32,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -115,6 +116,7 @@ async fn request(device_token: web::Path<String>,
 
     tokio::spawn(async move {
         let time_intervals = payload.time_intervals.clone();
+        let segment_count = payload.segment_count;
         let mut current_time: Duration;
         let mut target_time: Duration;
         let mut wait_time: Duration;
@@ -150,7 +152,7 @@ async fn request(device_token: web::Path<String>,
 
             let auth = &auth_token.read().await.token;
             if let Some(push_token) = push_token_map.read().await.get(device_token.as_ref()) {
-                send_la_update_to_apns(push_token, auth, &time_interval).await;
+                send_la_update_to_apns(push_token, auth, &time_interval, segment_count).await;
             }
         }
     });
@@ -179,7 +181,7 @@ async fn cancel_request(device_token: web::Path<String>,
 }
 
 /// Send a live activity update to APNs
-async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_interval: &TimerInterval) {
+async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_interval: &TimerInterval, segment_count: u32) {
     if STRESS_TEST {
         println!("Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -209,6 +211,7 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_inter
                 "status": timer_interval.status,
                 "task": timer_interval.task,
                 "currentSegment": timer_interval.current_segment,
+                "segmentCount": segment_count,
                 "startTimestamp": now,
                 "timeRemaining": 0,
                 "isFullSegment": true,
