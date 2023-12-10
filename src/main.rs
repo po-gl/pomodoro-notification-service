@@ -235,10 +235,15 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_inter
 
     match result {
         Ok(res) => {
+            let status = res.status().clone();
+            let headers = res.headers().clone();
+
             let blank_header = HeaderValue::from_static("");
-            let apns_id = res.headers().get("apns-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
-            let apns_unique_id = res.headers().get("apns-unique-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
-            println!("APNs response: status={}, apns-id={}, apns-unique-id={}",res.status(), apns_id, apns_unique_id);
+            let apns_id = headers.get("apns-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
+            let apns_unique_id = headers.get("apns-unique-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
+
+            let body = res.text().await.unwrap_or_default();
+            println!("APNs response: status={}, apns-id={}, apns-unique-id={} {}", status, apns_id, apns_unique_id, body);
         },
         Err(e) => eprintln!("APNs error: {e}"),
     }
