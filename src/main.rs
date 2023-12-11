@@ -134,7 +134,8 @@ async fn request(device_token: web::Path<String>,
             target_time = Duration::from_secs_f64(time_interval.starts_at);
             current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
             if target_time < current_time {
-                wait_time = Duration::from_secs(0)
+                // Set wait time to a second otherwise the APNs push might not deliver
+                wait_time = Duration::from_secs(1)
             } else {
                 wait_time = target_time - current_time
             }
@@ -151,8 +152,19 @@ async fn request(device_token: web::Path<String>,
             }
 
             let auth = &auth_token.read().await.token;
-            if let Some(push_token) = push_token_map.read().await.get(device_token.as_ref()) {
-                send_la_update_to_apns(push_token, auth, &time_interval, segment_count).await;
+
+            let push_token = push_token_map.read().await.get(device_token.as_ref()).map(|v| v.clone());
+            if let Some(push_token) = push_token {
+                send_la_update_to_apns(&push_token, auth, &time_interval, segment_count).await;
+
+            } else {
+                // try again after a couple seconds if we don't yet have a push token
+                tokio::time::sleep(Duration::from_secs(4)).await;
+
+                let push_token = push_token_map.read().await.get(device_token.as_ref()).map(|v| v.clone());
+                if let Some(push_token) = push_token {
+                    send_la_update_to_apns(&push_token, auth, &time_interval, segment_count).await;
+                }
             }
         }
     });
@@ -212,7 +224,7 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_inter
                 "task": timer_interval.task,
                 "currentSegment": timer_interval.current_segment,
                 "segmentCount": segment_count,
-                "startTimestamp": now,
+                "startTimestamp": timer_interval.starts_at,
                 "timeRemaining": 0,
                 "isFullSegment": true,
                 "isPaused": false,
