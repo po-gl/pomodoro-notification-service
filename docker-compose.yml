@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+  server:
+    build: .
+    ports:
+      - "${PORT}:80"
+    environment:
+      - PORT=80
+      - HOST=0.0.0.0
+      - TOPIC=${TOPIC}
+      - TEAM_ID=${TEAM_ID}
+      - AUTH_KEY_ID=${AUTH_KEY_ID}
+      - APNS_HOST_NAME=${APNS_HOST_NAME}
+      - TOKEN_KEY_PATH=/run/secrets/auth_key
+    secrets:
+      - auth_key
+
+secrets:
+  auth_key:
+    file: ./auth_priv_key.p8

@@ -1,0 +1,7 @@
+# ignore everything by default
+*
+
+# Exceptions
+!Cargo.toml
+!Cargo.lock
+!src/
