@@ -3,7 +3,7 @@
 mod authtoken;
 mod util;
 
-use actix_web::{Responder, HttpResponse, HttpServer, App, post, web::{self, Data}, error};
+use actix_web::{Responder, HttpResponse, HttpServer, App, post, get, web::{self, Data}, error};
 use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
@@ -63,6 +63,7 @@ async fn main() -> std::io::Result<()> {
             .service(request)
             .service(update_push_token)
             .service(cancel_request)
+            .service(health)
     })
         .bind(format!("{}:{}", host, port))?
         .run();
@@ -107,6 +108,12 @@ struct TimerInterval {
 #[serde(rename_all = "camelCase")]
 struct PushTokenData {
     push_token: String,
+}
+
+
+#[get("/health")]
+async fn health() -> impl Responder {
+    HttpResponse::Ok()
 }
 
 #[post("/request/{device_token}")]
