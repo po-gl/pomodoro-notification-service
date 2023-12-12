@@ -6,3 +6,4 @@
 !src/
 !Dockerfile
 !docker-compose.yml
+!.dockerignore
