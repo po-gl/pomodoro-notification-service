@@ -18,13 +18,24 @@ impl AuthToken {
     pub fn new() -> AuthToken {
         let jwt_header = AuthToken::generate_jwt_header();
         let jwt_claims = AuthToken::generate_jwt_claims();
-        let jwt_signed = AuthToken::generate_jwt_signed(&jwt_header, &jwt_claims).unwrap();
+        let jwt_signed = AuthToken::generate_jwt_signed(&jwt_header, &jwt_claims);
 
-        AuthToken {
-            token: AuthToken::get_formatted_token(&jwt_header, &jwt_claims, &jwt_signed),
-            jwt_header,
-            jwt_claims,
-            jwt_signed,
+        match jwt_signed {
+            Ok(jwt_signed) => {
+                AuthToken {
+                    token: AuthToken::get_formatted_token(&jwt_header, &jwt_claims, &jwt_signed),
+                    jwt_header,
+                    jwt_claims,
+                    jwt_signed,
+                }
+            },
+            Err(e) => {
+                println!("Failed to generate authentication token {:?}", e);
+                if let AuthTokenError::IO(_) = e {
+                    println!("Failed to read token key path. If using Docker, ensure the private key is made available to a mounted volume.")
+                }
+                panic!();
+            }
         }
     }
 
