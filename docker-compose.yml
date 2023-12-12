@@ -6,7 +6,6 @@ services:
     ports:
       - "${PORT}:80"
     environment:
-      - PORT=80
       - HOST=0.0.0.0
       - TOPIC=${TOPIC}
       - TEAM_ID=${TEAM_ID}
