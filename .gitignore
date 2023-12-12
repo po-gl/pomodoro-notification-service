@@ -1,2 +1,8 @@
-/target
-.env
+# Ignore everything by default
+*
+
+!Cargo.toml
+!Cargo.lock
+!src/
+!Dockerfile
+!docker-compose.yml
