@@ -1,6 +1,7 @@
 use std::env::VarError;
 use std::env;
 
+pub const HOST: &str = "HOST";
 pub const PORT: &str = "PORT";
 
 pub const VAR_TOPIC: &str = "TOPIC";

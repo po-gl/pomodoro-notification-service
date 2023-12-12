@@ -8,7 +8,7 @@ use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
-use util::{PORT, VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
+use util::{HOST, PORT, VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
 use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env, collections::HashMap};
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
@@ -18,7 +18,6 @@ use authtoken::AuthToken;
 const STRESS_TEST: bool = false;
 
 const AUTH_TOKEN_REFRESH_RATE_S: u64 = 60 * 50; // Needs refresh between 20-60 minutes
-const HOST: &str = "127.0.0.1";
 
 type CancelMap = HashMap<String, Sender<bool>>;
 
@@ -47,6 +46,9 @@ async fn main() -> std::io::Result<()> {
 
     let refresh_loop_handle = tokio::spawn(auth_token_refresh_loop(Arc::clone(&auth_token)));
 
+    let host = env::var(HOST).unwrap_or(String::from("127.0.0.1"));
+    let port = env::var(PORT).unwrap_or(String::from("9898"));
+
     let server_handle = HttpServer::new(move || {
         let json_cfg = web::JsonConfig::default()
             .error_handler(|err, _req| {
@@ -62,7 +64,7 @@ async fn main() -> std::io::Result<()> {
             .service(update_push_token)
             .service(cancel_request)
     })
-        .bind(format!("{}:{}", HOST, env::var(PORT).unwrap_or(String::from("9898"))))?
+        .bind(format!("{}:{}", host, port))?
         .run();
 
     tokio::select! {
