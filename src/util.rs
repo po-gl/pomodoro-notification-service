@@ -1,6 +1,8 @@
 use std::env::VarError;
 use std::env;
 
+pub const PORT: &str = "PORT";
+
 pub const VAR_TOPIC: &str = "TOPIC";
 pub const VAR_TEAM_ID: &str = "TEAM_ID";
 pub const VAR_TOKEN_KEY_PATH: &str = "TOKEN_KEY_PATH";

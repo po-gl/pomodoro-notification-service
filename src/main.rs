@@ -8,7 +8,7 @@ use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
-use util::{VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
+use util::{PORT, VAR_APNS_HOST_NAME, VAR_TOPIC, VAR_TEAM_ID, VAR_AUTH_KEY_ID, VAR_TOKEN_KEY_PATH};
 use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}, process::exit, env, collections::HashMap};
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
@@ -18,7 +18,7 @@ use authtoken::AuthToken;
 const STRESS_TEST: bool = false;
 
 const AUTH_TOKEN_REFRESH_RATE_S: u64 = 60 * 50; // Needs refresh between 20-60 minutes
-const HOST_ADDR: &str = "127.0.0.1:9797";
+const HOST: &str = "127.0.0.1";
 
 type CancelMap = HashMap<String, Sender<bool>>;
 
@@ -62,7 +62,7 @@ async fn main() -> std::io::Result<()> {
             .service(update_push_token)
             .service(cancel_request)
     })
-        .bind(HOST_ADDR)?
+        .bind(format!("{}:{}", HOST, env::var(PORT).unwrap_or(String::from("9898"))))?
         .run();
 
     tokio::select! {
