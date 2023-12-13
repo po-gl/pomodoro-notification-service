@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  server:
+  pomo_service:
     build: .
     ports:
       - "${PORT}:80"
@@ -14,7 +14,13 @@ services:
       - TOKEN_KEY_PATH=/run/secrets/auth_key
     secrets:
       - auth_key
+    networks:
+      - nginx_network
 
 secrets:
   auth_key:
     file: ./auth_priv_key.p8
+
+networks:
+  nginx_network:
+    external: true
