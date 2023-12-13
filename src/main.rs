@@ -102,6 +102,15 @@ struct TimerInterval {
     task: String,
     starts_at: f64,
     current_segment: u32,
+    alert: Alert,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Alert {
+    title: String,
+    body: String,
+    sound: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -239,8 +248,9 @@ async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_inter
                 "isPaused": false,
             },
             "alert": {
-                "title": format!("Time to {}", timer_interval.status),
-                "body": "test body",
+                "title": timer_interval.alert.title,
+                "body": timer_interval.alert.body,
+                "sound": timer_interval.alert.sound,
             }
         }
     }).to_string();
