@@ -4,4 +4,5 @@
 # Exceptions
 !Cargo.toml
 !Cargo.lock
+!log4rs.yaml
 !src/
