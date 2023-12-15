@@ -1,9 +1,5 @@
-# Ignore everything by default
-*
+.DS_Store
+target/
 
-!Cargo.toml
-!Cargo.lock
-!src/
-!Dockerfile
-!docker-compose.yml
-!.dockerignore
+.env
+auth_priv_key.p8
