@@ -1,9 +1,11 @@
+use log::{debug, error};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 use std::{time::{SystemTime, UNIX_EPOCH}, env};
 use tokio::time::Duration;
 
 use crate::util::{VAR_APNS_HOST_NAME, VAR_TOPIC};
+use crate::util;
 use crate::models::TimerInterval;
 
 use crate::STRESS_TEST;
@@ -11,10 +13,11 @@ use crate::STRESS_TEST;
 /// Send a live activity update to APNs
 pub async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_interval: &TimerInterval, segment_count: u32) {
     if STRESS_TEST {
-        println!("Simulated request to apns (STRESS_TEST=true)");
+        debug!("apns:: Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
         return;
     }
+    let short_device_token = util::get_short_token(&token);
 
     let client = reqwest::Client::builder()
         .http2_prior_knowledge()
@@ -29,7 +32,7 @@ pub async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_i
     headers.insert("content-type", HeaderValue::from_static("application/json"));
 
     let body = get_apns_body(timer_interval, segment_count);
-    println!("Body: {body}");
+    debug!("apns:: short_device_token: ...{} Response body: {}", short_device_token, body);
 
     let content_length = body.as_bytes().len();
     headers.insert("content-length", HeaderValue::from_str(content_length.to_string().as_str()).unwrap());
@@ -50,9 +53,9 @@ pub async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_i
             let apns_unique_id = headers.get("apns-unique-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
 
             let body = res.text().await.unwrap_or_default();
-            println!("APNs response: status={}, apns-id={}, apns-unique-id={}, {}", status, apns_id, apns_unique_id, body);
+            debug!("apns:: short_device_token: ...{} APNs response: status={}, apns-id={}, apns-unique-id={}, {}", short_device_token, status, apns_id, apns_unique_id, body);
         },
-        Err(e) => eprintln!("APNs error: {e}"),
+        Err(e) => error!("apns:: short_device_token: ...{} APNs error: {}", short_device_token, e),
     }
 }
 

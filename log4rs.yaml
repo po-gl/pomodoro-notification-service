@@ -1,0 +1,22 @@
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)(utc)} - {l}: {m}{n})}"
+  service:
+    kind: rolling_file
+    path: "/var/log/pomodoro-notification-service/service.log"
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)(utc)} - {l}: {m}{n})}"
+    policy:
+      trigger:
+        kind: size
+        limit: 40mb
+      roller:
+        kind: delete
+
+root:
+  level: debug
+  appenders:
+    - stdout
+    - service

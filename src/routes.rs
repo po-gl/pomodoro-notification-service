@@ -1,8 +1,9 @@
 use actix_web::{Responder, HttpResponse, post, get, web::{self}};
+use log::{info, debug};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::models::{RequestData, PushTokenData};
+use crate::{models::{RequestData, PushTokenData}, util::get_short_token};
 use crate::types::{CancelMap, PushTokenMap};
 use crate::authtoken::AuthToken;
 use crate::timing::start_timing_loop;
@@ -14,7 +15,11 @@ async fn update_push_token(device_token: web::Path<String>,
     push_token_map: web::Data<Arc<RwLock<PushTokenMap>>>) -> impl Responder {
 
     push_token_map.write().await.insert(device_token.clone(), payload.push_token.clone());
-    println!("Updating push_token (push_token_map size is now {}) {}", push_token_map.read().await.len(), payload.push_token);
+    
+    debug!("push_token:: Updating device_token...{} -> push_token...{} (push_token_map size is now {})",
+        get_short_token(device_token.as_ref()),
+        get_short_token(&payload.push_token),
+        push_token_map.read().await.len());
     HttpResponse::Ok()
 }
 
@@ -31,6 +36,7 @@ async fn cancel_request(device_token: web::Path<String>,
 
 #[get("/health")]
 pub async fn health() -> impl Responder {
+    info!("Health check");
     HttpResponse::Ok()
 }
 

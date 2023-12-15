@@ -30,9 +30,9 @@ impl AuthToken {
                 }
             },
             Err(e) => {
-                println!("Failed to generate authentication token {:?}", e);
+                eprintln!("Failed to generate authentication token {:?}", e);
                 if let AuthTokenError::IO(_) = e {
-                    println!("Failed to read token key path. If using Docker, ensure the private key is made available via secrets.")
+                    eprintln!("Failed to read token key path. If using Docker, ensure the private key is made available via secrets.")
                 }
                 panic!();
             }

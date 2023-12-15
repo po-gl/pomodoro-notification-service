@@ -10,6 +10,7 @@ mod timing;
 
 use actix_web::{HttpResponse, HttpServer, App, web::{self, Data}, error};
 use dotenv::dotenv;
+use log::{info, error, debug};
 use std::{sync::Arc, process::exit, env, collections::HashMap};
 use tokio::{sync::RwLock, time::Duration};
 
@@ -19,6 +20,8 @@ use routes::{request, update_push_token, cancel_request, health};
 use authtoken::AuthToken;
 
 pub const STRESS_TEST: bool = false;
+
+pub const LOG_CONFIG_PATH: &str = "log4rs.yaml";
 
 const AUTH_TOKEN_REFRESH_RATE_S: u64 = 60 * 50; // Needs refresh between 20-60 minutes
 
@@ -31,10 +34,11 @@ async fn main() -> std::io::Result<()> {
         eprintln!("Required environment variables: {VAR_TOPIC} {VAR_TEAM_ID} {VAR_AUTH_KEY_ID} {VAR_TOKEN_KEY_PATH} {VAR_APNS_HOST_NAME}");
         exit(1)
     }
+    util::init_logging();
 
     let auth_token = Arc::new(RwLock::new(AuthToken::new()));
     let auth_data = Data::new(auth_token.clone());
-    println!("Initial auth token: {}", &auth_token.read().await.token);
+    debug!("Initial auth token: {}", &auth_token.read().await.token);
 
     let push_token_map: PushTokenMap = HashMap::new();
     let push_token_map_data = Data::new(Arc::new(RwLock::new(push_token_map)));
@@ -50,7 +54,7 @@ async fn main() -> std::io::Result<()> {
     let server_handle = HttpServer::new(move || {
         let json_cfg = web::JsonConfig::default()
             .error_handler(|err, _req| {
-                println!("Json config error: {}", err);
+                error!("Json config error: {}", err);
                 error::InternalError::from_response(err, HttpResponse::Conflict().into()).into()
             });
         App::new()
@@ -78,9 +82,8 @@ async fn auth_token_refresh_loop(auth_token: Arc<RwLock<AuthToken>>) {
         tokio::time::sleep(Duration::from_secs(AUTH_TOKEN_REFRESH_RATE_S)).await;
         let result = auth_token.write().await.refresh();
         match result {
-            // TODO: change prints to logs w/ timestamps
-            Ok(_) => println!("AuthToken refreshed sucessfully"),
-            Err(e) => println!("AuthToken refresh error {:?}", e),
+            Ok(_) => info!("AuthToken refreshed sucessfully"),
+            Err(e) => error!("AuthToken refresh error {:?}", e),
         }
     }
 }

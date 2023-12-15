@@ -18,3 +18,12 @@ pub fn check_environment_vars() -> Result<(), VarError> {
     env::var(VAR_APNS_HOST_NAME)?;
     Ok(())
 }
+
+pub fn init_logging() {
+    log4rs::init_file(crate::LOG_CONFIG_PATH, Default::default()).unwrap();
+}
+
+pub fn get_short_token(device_token: &String) -> &str {
+    let pos = device_token.char_indices().nth_back(16).unwrap().0;
+    &device_token[pos..]
+}
