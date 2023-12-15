@@ -1,4 +1,4 @@
-use log::{debug, error};
+use log::{info, error};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 use std::{time::{SystemTime, UNIX_EPOCH}, env};
@@ -13,7 +13,7 @@ use crate::STRESS_TEST;
 /// Send a live activity update to APNs
 pub async fn send_la_update_to_apns(device_token: &String, auth_token: &String, timer_interval: &TimerInterval, segment_count: u32) {
     if STRESS_TEST {
-        debug!("apns:: Simulated request to apns (STRESS_TEST=true)");
+        info!("apns:: Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
         return;
     }
@@ -32,7 +32,7 @@ pub async fn send_la_update_to_apns(device_token: &String, auth_token: &String, 
     headers.insert("content-type", HeaderValue::from_static("application/json"));
 
     let body = get_apns_body(timer_interval, segment_count);
-    debug!("apns:: short_device_token: ...{} Response body: {}", short_device_token, body);
+    info!("apns:: short_device_token: ...{} Response body: {}", short_device_token, body);
 
     let content_length = body.as_bytes().len();
     headers.insert("content-length", HeaderValue::from_str(content_length.to_string().as_str()).unwrap());
@@ -53,7 +53,7 @@ pub async fn send_la_update_to_apns(device_token: &String, auth_token: &String, 
             let apns_unique_id = headers.get("apns-unique-id").unwrap_or(&blank_header).to_str().unwrap_or_default();
 
             let body = res.text().await.unwrap_or_default();
-            debug!("apns:: short_device_token: ...{} APNs response: status={}, apns-id={}, apns-unique-id={}, {}", short_device_token, status, apns_id, apns_unique_id, body);
+            info!("apns:: short_device_token: ...{} APNs response: status={}, apns-id={}, apns-unique-id={}, {}", short_device_token, status, apns_id, apns_unique_id, body);
         },
         Err(e) => error!("apns:: short_device_token: ...{} APNs error: {}", short_device_token, e),
     }

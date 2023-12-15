@@ -16,7 +16,7 @@ appenders:
         kind: delete
 
 root:
-  level: debug
+  level: info
   appenders:
     - stdout
     - service

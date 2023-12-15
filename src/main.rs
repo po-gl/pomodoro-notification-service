@@ -10,7 +10,7 @@ mod timing;
 
 use actix_web::{HttpResponse, HttpServer, App, web::{self, Data}, error};
 use dotenv::dotenv;
-use log::{info, error, debug};
+use log::{info, error};
 use std::{sync::Arc, process::exit, env, collections::HashMap};
 use tokio::{sync::RwLock, time::Duration};
 
@@ -38,7 +38,7 @@ async fn main() -> std::io::Result<()> {
 
     let auth_token = Arc::new(RwLock::new(AuthToken::new()));
     let auth_data = Data::new(auth_token.clone());
-    debug!("Initial auth token: {}", &auth_token.read().await.token);
+    info!("Initial auth token: {}", &auth_token.read().await.token);
 
     let push_token_map: PushTokenMap = HashMap::new();
     let push_token_map_data = Data::new(Arc::new(RwLock::new(push_token_map)));

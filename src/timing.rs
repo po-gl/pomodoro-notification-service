@@ -1,5 +1,5 @@
 use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}};
-use log::debug;
+use log::info;
 use tokio::{sync::{mpsc, RwLock}, time::Duration};
 
 use crate::models::TimerInterval;
@@ -39,7 +39,7 @@ pub async fn start_timing_loop(time_intervals: Vec<TimerInterval>,
             wait_time = target_time - current_time
         }
 
-        debug!("timing_loop:: short_device_token: ...{} waiting for {:?}", short_device_token, wait_time);
+        info!("timing_loop:: short_device_token: ...{} waiting for {:?}", short_device_token, wait_time);
 
         let sleep_handle = tokio::time::sleep(wait_time);
         let cancel_handle = rx.recv();
@@ -47,7 +47,7 @@ pub async fn start_timing_loop(time_intervals: Vec<TimerInterval>,
         tokio::select! {
             _ = sleep_handle => {}
             _ = cancel_handle => {
-            debug!("timing_loop:: short_device_token: ...{} request canceled", short_device_token);
+            info!("timing_loop:: short_device_token: ...{} request canceled", short_device_token);
             break;
             }
         }
@@ -56,7 +56,7 @@ pub async fn start_timing_loop(time_intervals: Vec<TimerInterval>,
 
         let push_token = push_token_map.read().await.get(&device_token).map(|v| v.clone());
         if let Some(push_token) = push_token {
-            debug!("timing_loop:: short_device_token: ...{} AuthToken used: {}", short_device_token, auth);
+            info!("timing_loop:: short_device_token: ...{} AuthToken used: {}", short_device_token, auth);
             send_la_update_to_apns(&push_token, auth, &time_interval, segment_count).await;
 
         } else {
