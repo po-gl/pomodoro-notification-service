@@ -11,18 +11,18 @@ use crate::models::TimerInterval;
 use crate::STRESS_TEST;
 
 /// Send a live activity update to APNs
-pub async fn send_la_update_to_apns(token: &String, auth_token: &String, timer_interval: &TimerInterval, segment_count: u32) {
+pub async fn send_la_update_to_apns(device_token: &String, auth_token: &String, timer_interval: &TimerInterval, segment_count: u32) {
     if STRESS_TEST {
         debug!("apns:: Simulated request to apns (STRESS_TEST=true)");
         tokio::time::sleep(Duration::from_secs(1)).await;
         return;
     }
-    let short_device_token = util::get_short_token(&token);
+    let short_device_token = util::get_short_token(&device_token);
 
     let client = reqwest::Client::builder()
         .http2_prior_knowledge()
         .build().unwrap();
-    let url = format!("https://{}/3/device/{}", env::var(VAR_APNS_HOST_NAME).unwrap(), token);
+    let url = format!("https://{}/3/device/{}", env::var(VAR_APNS_HOST_NAME).unwrap(), device_token);
 
     let mut headers = HeaderMap::new();
     headers.insert("apns-topic", HeaderValue::from_str(format!("{}.push-type.liveactivity", env::var(VAR_TOPIC).unwrap()).as_str()).unwrap());
