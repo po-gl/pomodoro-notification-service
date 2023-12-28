@@ -24,6 +24,6 @@ pub fn init_logging() {
 }
 
 pub fn get_short_token(device_token: &String) -> &str {
-    let pos = device_token.char_indices().nth_back(16).unwrap().0;
+    let pos = device_token.char_indices().nth_back(16).unwrap_or((0, ' ')).0;
     &device_token[pos..]
 }
