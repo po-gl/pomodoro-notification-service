@@ -3,8 +3,6 @@ version: "3"
 services:
   pomo_service:
     build: .
-    ports:
-      - "${PORT}:80"
     environment:
       - HOST=0.0.0.0
       - TOPIC=${TOPIC}
